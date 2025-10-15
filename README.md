@@ -1,4 +1,5 @@
-Retail & E-commerce KPI Compendium
+##Retail & E-commerce KPI Compendium
+
 A curated and comprehensive collection of Key Performance Indicators (KPIs) for the retail and e-commerce industry. This repository aims to provide a standardized, ready-to-use dataset for data analysts, BI developers, retail managers, and data scientists.
 
 About This Project
