@@ -1,0 +1,71 @@
+{
+    "demand": {
+        "shortfall": {
+            "Combined": {
+                "query": "SELECT source.product AS \"Product Description\", source.avg_ratio AS \"Variance Ratio\", source.product_id AS \"Product Id\", source.demand_qty AS \"Total Demand\" FROM ( SELECT product_description AS product, product_id, AVG(ratio) AS avg_ratio, SUM(demand_qty) AS demand_qty FROM ( SELECT product_id, product_description, demand_qty, org_code, ratio, flag, 'online' AS order_type FROM demand_outlier UNION ALL SELECT product_id, product_description, ordered_qty AS demand_qty, org_code, ratio, flag, 'pos' AS order_type FROM pos_sales ) AS combined WHERE flag = -1 GROUP BY product_id, product_description ORDER BY avg_ratio ASC OFFSET offset_placeholder LIMIT limit_placeholder ) AS source;",
+                "response_template_order": [
+                    "Product Description",
+                    "Variance Ratio",
+                    "Product ID",
+                    "Total Demand"
+                ]
+            },
+            "InStore": {
+                "query": "SELECT \"public\".\"pos_sales\".\"product_id\" AS \"Product Id\", \"public\".\"pos_sales\".\"product_description\" AS \"Product Description\", AVG(\"public\".\"pos_sales\".\"ratio\") AS \"Variance Ratio\", SUM(\"public\".\"pos_sales\".\"ordered_qty\") AS \"Total Demand\" FROM \"public\".\"pos_sales\" WHERE \"public\".\"pos_sales\".\"flag\" = -1 GROUP BY \"public\".\"pos_sales\".\"product_id\", \"public\".\"pos_sales\".\"product_description\" ORDER BY \"Variance Ratio\" ASC, \"public\".\"pos_sales\".\"product_id\" ASC, \"public\".\"pos_sales\".\"product_description\" ASC OFFSET offset_placeholder LIMIT limit_placeholder;",
+                "response_template_order": [
+                    "Product ID",
+                    "Product Description",
+                    "Variance Ratio",
+                    "Sum of Ordered Qty"
+                ]
+            },
+            "Online": {
+                "query": "SELECT \"public\".\"demand_outlier\".\"product_id\" AS \"Product Id\", \"public\".\"demand_outlier\".\"product_description\" AS \"Product Description\", AVG(\"public\".\"demand_outlier\".\"ratio\") AS \"Variance Ratio\", SUM(\"public\".\"demand_outlier\".\"demand_qty\") AS \"Total Demand\" FROM \"public\".\"demand_outlier\" WHERE \"public\".\"demand_outlier\".\"flag\" = -1 GROUP BY \"public\".\"demand_outlier\".\"product_id\", \"public\".\"demand_outlier\".\"product_description\" ORDER BY \"Variance Ratio\" ASC, \"public\".\"demand_outlier\".\"product_id\" ASC, \"public\".\"demand_outlier\".\"product_description\" ASC OFFSET offset_placeholder LIMIT limit_placeholder;",
+                "response_template_order": [
+                    "Product ID",
+                    "Product Description",
+                    "Variance Ratio",
+                    "Sum of Demand Qty"
+                ]
+            }
+        },
+        "surge": {
+            "Combined": {
+                "query": "select product_id as \"Product Id\", product_description as \"Product Description\" , avg(ratio) AS \"Variance Ratio\", sum(demand_qty) as \"Total Demand\" from ((select product_id,product_description,org_code,ratio, flag, 'online' as order_type,demand_qty from demand_outlier) union (select product_id,product_description,org_code,ratio, flag, 'pos' as order_type, ordered_qty as demand_qty from pos_sales)) where flag=1 group by product_description,product_id, order_type order by \"Variance Ratio\" desc offset offset_placeholder limit limit_placeholder;",
+                "response_template_order": [
+                    "Product ID",
+                    "Product Description",
+                    "Variance Ratio",
+                    "Total Demand"
+                ]
+            },
+            "InStore": {
+                "query": "SELECT \"public\".\"pos_sales\".\"product_id\" AS \"Product Id\", \"public\".\"pos_sales\".\"product_description\" AS \"Product Description\", AVG(\"public\".\"pos_sales\".\"ratio\") AS \"Variance Ratio\", SUM(\"public\".\"pos_sales\".\"ordered_qty\") AS \"sum\" FROM \"public\".\"pos_sales\" WHERE \"public\".\"pos_sales\".\"flag\" = 1 GROUP BY \"public\".\"pos_sales\".\"product_id\", \"public\".\"pos_sales\".\"product_description\" ORDER BY AVG(\"public\".\"pos_sales\".\"ratio\") DESC, \"public\".\"pos_sales\".\"product_id\" ASC, \"public\".\"pos_sales\".\"product_description\" ASC OFFSET offset_placeholder LIMIT limit_placeholder;",
+                "response_template_order": [
+                    "Product ID",
+                    "Product Description",
+                    "Variance Ratio",
+                    "Sum of Ordered Qty"
+                ]
+            },
+            "Online": {
+                "query": "SELECT \"public\".\"demand_outlier\".\"product_id\" AS \"Product Id\", \"public\".\"demand_outlier\".\"product_description\" AS \"Product Description\", AVG(\"public\".\"demand_outlier\".\"ratio\") AS \"Variance Ratio\", SUM(\"public\".\"demand_outlier\".\"demand_qty\") AS \"sum\" FROM \"public\".\"demand_outlier\" WHERE \"public\".\"demand_outlier\".\"flag\" = 1 GROUP BY \"public\".\"demand_outlier\".\"product_id\", \"public\".\"demand_outlier\".\"product_description\" ORDER BY AVG(\"public\".\"demand_outlier\".\"ratio\") DESC, \"public\".\"demand_outlier\".\"product_id\" ASC, \"public\".\"demand_outlier\".\"product_description\" ASC OFFSET offset_placeholder LIMIT limit_placeholder;",
+                "response_template_order": [
+                    "Product ID",
+                    "Product Description",
+                    "Variance Ratio",
+                    "Sum of Demand Qty"
+                ]
+            }
+        },
+        "actual-forecast": {
+            "query": "WITH earliest_date AS (SELECT product_id, MIN(week_date) AS min_date FROM forecast_data GROUP BY product_id), filtered_raw_data AS (SELECT rd.product_id, rd.ds AS \"date\", NULL::integer AS \"week\", rd.y AS \"value\", FALSE AS \"isForecast\", ROW_NUMBER() OVER (PARTITION BY rd.product_id ORDER BY rd.ds DESC) AS rn FROM raw_data_latest rd JOIN earliest_date ed ON rd.product_id = ed.product_id AND rd.ds < ed.min_date WHERE rd.product_id IN productIds), last_n_records_raw_data AS (SELECT product_id, \"date\", \"week\", \"value\", \"isForecast\" FROM filtered_raw_data WHERE rn <= (actual_weeks)), forecast_data AS (SELECT fd.product_id, fd.week_date AS \"date\", fd.week_seq AS \"week\", fd.forecast_value AS \"value\", TRUE AS \"isForecast\", ROW_NUMBER() OVER (PARTITION BY fd.product_id ORDER BY fd.week_date) AS rn FROM forecast_data fd WHERE fd.product_id IN productIds), last_n_forecasted_data AS (SELECT product_id, \"date\", \"week\", \"value\", \"isForecast\" FROM forecast_data WHERE rn <= (forecasted_weeks)), combined_data AS (SELECT * FROM last_n_records_raw_data UNION ALL SELECT * FROM last_n_forecasted_data), ranked_data AS (SELECT product_id, \"date\", ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY \"date\") AS week_no, \"value\", \"isForecast\" FROM combined_data) SELECT * FROM ranked_data ORDER BY product_id, week_no;"
+        },
+        "actual-forecast-latest": {
+            "query": "WITH earliest_date AS (SELECT product_id, MIN(week_date) AS min_date FROM longterm_forecast_gbm GROUP BY product_id), filtered_raw_data AS (SELECT rd.product_id, rd.ds AS \"date\", NULL::integer AS \"week\", rd.y AS \"value\", FALSE AS \"isForecast\", ROW_NUMBER() OVER (PARTITION BY rd.product_id ORDER BY rd.ds DESC) AS rn FROM raw_data_gbm rd JOIN earliest_date ed ON rd.product_id = ed.product_id AND rd.ds < ed.min_date WHERE rd.product_id IN productIds), last_n_records_raw_data AS (SELECT product_id, \"date\", \"week\", \"value\", \"isForecast\" FROM filtered_raw_data WHERE rn <= (actual_weeks)), forecast_data AS (SELECT fd.product_id, fd.week_date AS \"date\", fd.week_seq AS \"week\", fd.forecast_value AS \"value\", TRUE AS \"isForecast\", ROW_NUMBER() OVER (PARTITION BY fd.product_id ORDER BY fd.week_date) AS rn FROM longterm_forecast_gbm fd WHERE fd.product_id IN productIds), last_n_forecasted_data AS (SELECT product_id, \"date\", \"week\", \"value\", \"isForecast\" FROM forecast_data WHERE rn <= (forecasted_weeks)), combined_data AS (SELECT * FROM last_n_records_raw_data UNION ALL SELECT * FROM last_n_forecasted_data), ranked_data AS (SELECT product_id, \"date\", ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY \"date\") AS week_no, \"value\", \"isForecast\" FROM combined_data) SELECT * FROM ranked_data ORDER BY product_id, week_no;"
+        },
+        "demand_forecast_compare": {
+            "query":"WITH filtered_data AS (SELECT r.product_id AS product_id, r.ds AS date, CAST(r.y AS text) AS actual, t.predicted AS predicted, ROW_NUMBER() OVER (PARTITION BY r.product_id ORDER BY r.ds DESC) AS rn FROM raw_data_gbm_best r JOIN train_predictions_gbm_best t ON r.product_id = t.product_id AND r.ds = t.date WHERE r.product_id IN ({productIds})), limited_filtered_data AS (SELECT product_id, date, actual, predicted FROM filtered_data WHERE rn <= {actual_weeks}), longterm_forecast AS (SELECT product_id, week_date AS date, forecast_value AS predicted, ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY week_date) AS rn FROM longterm_forecast_gbm_best WHERE product_id IN ({productIds})), longterm_filtered AS (SELECT product_id, date, 'NaN' AS actual, predicted FROM longterm_forecast WHERE rn <= {forecasted_weeks}), combined_data AS (SELECT product_id, date, actual, predicted FROM limited_filtered_data UNION ALL SELECT product_id, date, actual, predicted FROM longterm_filtered) SELECT product_id, date, actual, predicted, ROW_NUMBER() OVER (ORDER BY product_id, date) AS week FROM combined_data ORDER BY product_id, date;"
+        }
+    }
+}

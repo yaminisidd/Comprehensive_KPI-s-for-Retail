@@ -1,0 +1,13 @@
+{
+    "sku_prioritization": {
+        "top_performing": {
+            "query": "SELECT product_id, normalized_shap_value, normalized_score, sku_category FROM sku_prioritization where sku_category='High';"
+        },
+        "top_performing_sku_count": {
+            "query": "SELECT count(distinct(product_id)) FROM sku_prioritization where sku_category='High';"
+        },
+        "all_priority_score": {
+            "query": "SELECT product_id, normalized_shap_value, normalized_score, sku_category FROM sku_prioritization;"
+        }
+    }
+}
